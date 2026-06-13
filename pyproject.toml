@@ -1,0 +1,14 @@
+[tool.fastapi]
+entrypoint = "src.app.main:app"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "my-fastapi-app"
+version = "0.1.0"
+dependencies = [
+    "fastapi[standard]",
+    # ... your other dependencies
+]
