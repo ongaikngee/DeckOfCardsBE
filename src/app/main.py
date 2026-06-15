@@ -9,11 +9,19 @@ class ModelName(str, Enum):
     resnet = "resnet"
     lenet = "lenet"
 
+
 class Item(BaseModel):
     name: str
     description: str | None = None
     price: float
     tax: float | None = None
+
+
+class User(BaseModel):
+    id: int | None = None
+    username: str
+    password: str
+
 
 app = FastAPI()
 
@@ -33,6 +41,7 @@ app.add_middleware(
 )
 
 fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"}]
+
 
 @app.get("/")
 def read_root():
@@ -59,6 +68,7 @@ async def get_model(model_name: ModelName):
 
     return {"model_name": model_name, "message": "Have some residuals"}
 
+
 @app.get("/items/")
 async def read_items(q: str | None = None):
     results = {"items": [{"item_id": "Foo"}, {"item_id": "Bar"}]}
@@ -82,8 +92,25 @@ async def create_item(item: Item):
 
 
 @app.put("/items/{item_id}")
-async def update_item(item_id: int, item:Item, q:str | None = None):
+async def update_item(item_id: int, item: Item, q: str | None = None):
     result = {"item_id": item_id, **item.model_dump()}
     if q:
-        result.update({"q":q})
+        result.update({"q": q})
     return result
+
+
+# Auth
+@app.get("/auth/{user_id}")
+async def get_user(user_id: int):
+    # TODO: Need to hook up to a DB
+    print(user_id)
+    results = {"user": {"id": user_id, "name": "John Doe"}}
+    return results
+
+
+@app.post("/auth/")
+async def create_user(user: User):
+    # TODO: Need to hook up to a DB
+    # user_dict = user.model_dump()
+    results = {"user": {"id": 88, "name": user.username}}
+    return results
