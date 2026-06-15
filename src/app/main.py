@@ -1,6 +1,8 @@
 from enum import Enum
 from fastapi import FastAPI
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+
 
 class ModelName(str, Enum):
     alexnet = "alexnet"
@@ -14,6 +16,21 @@ class Item(BaseModel):
     tax: float | None = None
 
 app = FastAPI()
+
+origins = [
+    "http://localhost.tiangolo.com",
+    "https://localhost.tiangolo.com",
+    "http://localhost",
+    "http://localhost:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"}]
 
@@ -42,10 +59,17 @@ async def get_model(model_name: ModelName):
 
     return {"model_name": model_name, "message": "Have some residuals"}
 
-
 @app.get("/items/")
-async def read_item(skip: int = 0, limit: int = 10):
-    return fake_items_db[skip : skip + limit]
+async def read_items(q: str | None = None):
+    results = {"items": [{"item_id": "Foo"}, {"item_id": "Bar"}]}
+    if q:
+        results.update({"q": q})
+    return results
+
+
+# @app.get("/items/")
+# async def read_item(skip: int = 0, limit: int = 10):
+#     return fake_items_db[skip : skip + limit]
 
 
 @app.post("/items/")
