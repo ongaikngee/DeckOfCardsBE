@@ -2,6 +2,9 @@ from enum import Enum
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from routers import users
+import models.user 
+from core.database import engine
 
 
 class ModelName(str, Enum):
@@ -16,14 +19,10 @@ class Item(BaseModel):
     price: float
     tax: float | None = None
 
-
-class User(BaseModel):
-    id: int | None = None
-    username: str
-    password: str
-
-
 app = FastAPI()
+app.include_router(users.router)
+models.user.Base.metadata.create_all(bind=engine)
+
 
 origins = [
     "http://localhost.tiangolo.com",
@@ -77,11 +76,6 @@ async def read_items(q: str | None = None):
     return results
 
 
-# @app.get("/items/")
-# async def read_item(skip: int = 0, limit: int = 10):
-#     return fake_items_db[skip : skip + limit]
-
-
 @app.post("/items/")
 async def create_item(item: Item):
     item_dict = item.model_dump()
@@ -98,19 +92,3 @@ async def update_item(item_id: int, item: Item, q: str | None = None):
         result.update({"q": q})
     return result
 
-
-# Auth
-@app.get("/auth/{user_id}")
-async def get_user(user_id: int):
-    # TODO: Need to hook up to a DB
-    print(user_id)
-    results = {"user": {"id": user_id, "name": "John Doe"}}
-    return results
-
-
-@app.post("/auth/")
-async def create_user(user: User):
-    # TODO: Need to hook up to a DB
-    # user_dict = user.model_dump()
-    results = {"user": {"id": 88, "name": user.username}}
-    return results
