@@ -1,12 +1,28 @@
+import os
+
 from enum import Enum
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from routers import users
-import models.user 
-from core.database import engine
+from sqlmodel import Field, Session, SQLModel, create_engine, select
+from dotenv import load_dotenv
 
+load_dotenv()
 
+engine = create_engine(os.getenv("DATABASE_URL"))
+
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+    
+
+class Hero(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True)
+    secret_name: str
+    age: int | None = Field(default=None, index=True)
+    
+    
 class ModelName(str, Enum):
     alexnet = "alexnet"
     resnet = "resnet"
@@ -21,8 +37,10 @@ class Item(BaseModel):
 
 app = FastAPI()
 app.include_router(users.router)
-models.user.Base.metadata.create_all(bind=engine)
 
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
 
 origins = [
     "http://localhost.tiangolo.com",
@@ -92,3 +110,19 @@ async def update_item(item_id: int, item: Item, q: str | None = None):
         result.update({"q": q})
     return result
 
+
+
+@app.post("/heroes/")
+def create_hero(hero: Hero):
+    with Session(engine) as session:
+        session.add(hero)
+        session.commit()
+        session.refresh(hero)
+        return hero
+
+
+@app.get("/heroes/")
+def read_heroes():
+    with Session(engine) as session:
+        heroes = session.exec(select(Hero)).all()
+        return heroes
