@@ -3,8 +3,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from routers import users
-import models.user 
-from core.database import engine
 
 
 class ModelName(str, Enum):
@@ -21,7 +19,6 @@ class Item(BaseModel):
 
 app = FastAPI()
 app.include_router(users.router)
-models.user.Base.metadata.create_all(bind=engine)
 
 
 origins = [
