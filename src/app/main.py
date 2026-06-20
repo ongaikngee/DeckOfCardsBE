@@ -3,8 +3,24 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from src.app.routers import items, games, models
 import os
+from sqlmodel import Field, Session, SQLModel, create_engine, select
+
+class Hero(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True)
+    secret_name: str
+    age: int | None = Field(default=None, index=True)
+
+engine = create_engine(os.getenv("DATABASE_URL"))
+
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
 
 app = FastAPI()
+
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
 
 app.include_router(items.router)
 app.include_router(games.router)
@@ -32,3 +48,18 @@ def read_root():
     url = os.getenv("DATABASE_URL")
     return {"Hello": url}
 
+
+@app.post("/heroes/")
+def create_hero(hero: Hero):
+    with Session(engine) as session:
+        session.add(hero)
+        session.commit()
+        session.refresh(hero)
+        return hero
+
+
+@app.get("/heroes/")
+def read_heroes():
+    with Session(engine) as session:
+        heroes = session.exec(select(Hero)).all()
+        return heroes
