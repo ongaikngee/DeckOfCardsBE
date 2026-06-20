@@ -12,5 +12,4 @@ dependencies = [
     "fastapi[standard]",
     "sqlmodel",
     "psycopg2",
-    # ... your other dependencies
 ]
