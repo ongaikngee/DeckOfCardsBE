@@ -11,5 +11,6 @@ version = "0.1.0"
 dependencies = [
     "fastapi[standard]",
     "sqlmodel",
+    "psycopg2",
     # ... your other dependencies
 ]
