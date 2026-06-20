@@ -2,8 +2,10 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import items, games, models
+import os
+from dotenv import load_dotenv
 
-
+load_dotenv()
 
 app = FastAPI()
 
@@ -30,10 +32,6 @@ fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"
 
 @app.get("/")
 def read_root():
-    return {"Hello": "World"}
-
-
-
-
-
+    url = os.getenv("DATABASE_URL")
+    return {"Hello": url}
 
