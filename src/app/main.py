@@ -1,33 +1,32 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from src.app.routers import items, games, models
+from src.app.routers import games, items, models, users
 import os
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from src.app.core.database import engine, SessionLocal
 from dotenv import load_dotenv
+import src.app.models.user
+from typing import Annotated
+from sqlalchemy.orm import Session
 
 load_dotenv()
 
-class Hero(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(index=True)
-    secret_name: str
-    age: int | None = Field(default=None, index=True)
-
-engine = create_engine(os.getenv("DATABASE_URL"))
-
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
-
 app = FastAPI()
+src.app.models.user.Base.metadata.create_all(bind=engine)
 
-@app.on_event("startup")
-def on_startup():
-    create_db_and_tables()
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+        
+db_dependency = Annotated[Session, Depends(get_db)]
 
 app.include_router(items.router)
 app.include_router(games.router)
 app.include_router(models.router)
+app.include_router(users.router)
 
 origins = [
     "http://localhost.tiangolo.com",
@@ -50,19 +49,3 @@ fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"
 def read_root():
     url = os.getenv("DATABASE_URL")
     return {"Hello": url}
-
-
-@app.post("/heroes/")
-def create_hero(hero: Hero):
-    with Session(engine) as session:
-        session.add(hero)
-        session.commit()
-        session.refresh(hero)
-        return hero
-
-
-@app.get("/heroes/")
-def read_heroes():
-    with Session(engine) as session:
-        heroes = session.exec(select(Hero)).all()
-        return heroes
