@@ -4,6 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.app.routers import items, games, models
 import os
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Hero(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)

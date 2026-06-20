@@ -22,7 +22,8 @@ Jinja2==3.1.6
 markdown-it-py==4.2.0
 MarkupSafe==3.0.3
 mdurl==0.1.2
--e git+https://github.com/ongaikngee/DeckOfCardsBE.git@f4af97874ba3134016fffa8fca1ccb7d96c8ac95#egg=my_fastapi_app
+-e git+https://github.com/ongaikngee/DeckOfCardsBE.git@f1680e1b4a2b63a279727816fed585eaad1f855e#egg=my_fastapi_app
+psycopg2-binary==2.9.12
 pwdlib==0.3.0
 pycparser==3.0
 pydantic==2.13.4
