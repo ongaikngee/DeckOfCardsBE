@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import items, games, models
+from src.app.routers import items, games, models
 import os
 from dotenv import load_dotenv
 

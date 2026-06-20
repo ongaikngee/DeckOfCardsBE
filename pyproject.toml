@@ -1,5 +1,5 @@
 [tool.fastapi]
-entrypoint = "app.main:app"
+entrypoint = "src.app.main:app"
 
 [build-system]
 requires = ["setuptools>=61"]
