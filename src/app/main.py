@@ -29,8 +29,7 @@ app.include_router(models.router)
 app.include_router(users.router)
 
 origins = [
-    "http://localhost.tiangolo.com",
-    "https://localhost.tiangolo.com",
+    "https://deckofcard-beta.vercel.app",
     "http://localhost",
     "http://localhost:5173",
 ]
