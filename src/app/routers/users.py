@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from starlette import status
 from typing import Annotated
@@ -7,22 +7,23 @@ from src.app.core.database import SessionLocal
 from src.app.models.user import Users
 import bcrypt
 
-router = APIRouter(prefix="/users", tags=['Users'])
+router = APIRouter(prefix="/users", tags=["Users"])
+
 
 def hash_password(password: str) -> str:
     # Convert string to bytes
-    password_bytes = password.encode('utf-8')
+    password_bytes = password.encode("utf-8")
     # Generate a salt and hash the password
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password_bytes, salt)
     # Return as a string to store in your database
-    return hashed.decode('utf-8')
+    return hashed.decode("utf-8")
 
 
 class CreateUserRequest(BaseModel):
     username: str
-    hashed_password: str
-    
+    password: str
+
 
 def get_db():
     db = SessionLocal()
@@ -30,18 +31,60 @@ def get_db():
         yield db
     finally:
         db.close()
-        
+
+
 db_dependency = Annotated[Session, Depends(get_db)]
 
-        
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_user(db: db_dependency, create_user_request: CreateUserRequest):
     create_user_model = Users(
         username=create_user_request.username,
-        hashed_password=hash_password(create_user_request.hashed_password),
+        hashed_password=hash_password(create_user_request.password),
     )
 
     db.add(create_user_model)
     db.commit()
 
     return create_user_model
+
+
+@router.get("/{user_id}")
+async def get_user(db: db_dependency, user_id: int):
+    user = db.query(Users).filter(Users.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+
+@router.get("/")
+async def get_users(db: db_dependency):
+    users = db.query(Users).all()
+    return users
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(db: db_dependency, user_id: int):
+    user = db.query(Users).filter(Users.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    db.delete(user)
+    db.commit()
+    return {"message": "User deleted successfully"}
+
+
+@router.put("/{user_id}")
+async def update_user(
+    db: db_dependency, user_id: int, update_user_request: CreateUserRequest
+):
+    user = db.query(Users).filter(Users.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.username = update_user_request.username
+    user.hashed_password = hash_password(update_user_request.password)
+
+    db.commit()
+    db.refresh(user)
+    return user
