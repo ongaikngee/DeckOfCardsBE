@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from starlette import status
 from typing import Annotated
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from src.app.core.database import SessionLocal
 from src.app.models.user import Users
 import bcrypt
@@ -43,8 +44,14 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
         hashed_password=hash_password(create_user_request.password),
     )
 
-    db.add(create_user_model)
-    db.commit()
+    try:
+        db.add(create_user_model)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
+        )
 
     return create_user_model
 
@@ -53,7 +60,9 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
 async def get_user(db: db_dependency, user_id: int):
     user = db.query(Users).filter(Users.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
     return user
 
 
@@ -67,7 +76,9 @@ async def get_users(db: db_dependency):
 async def delete_user(db: db_dependency, user_id: int):
     user = db.query(Users).filter(Users.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     db.delete(user)
     db.commit()
@@ -80,11 +91,20 @@ async def update_user(
 ):
     user = db.query(Users).filter(Users.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     user.username = update_user_request.username
     user.hashed_password = hash_password(update_user_request.password)
 
-    db.commit()
-    db.refresh(user)
+    try:
+        db.add(user)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
+        )
+        
     return user
