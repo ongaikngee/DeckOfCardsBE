@@ -12,4 +12,5 @@ dependencies = [
     "fastapi[standard]",
     "bcrypt",
     "sqlalchemy",
+    "psycopg2",
 ]
