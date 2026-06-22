@@ -47,13 +47,14 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     try:
         db.add(create_user_model)
         db.commit()
+        db.refresh(create_user_model) 
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
         )
 
-    return create_user_model
+    return {"user_id": create_user_model.id, "username": create_user_model.username}
 
 
 @router.get("/{user_id}")
