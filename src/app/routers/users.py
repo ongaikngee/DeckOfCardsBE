@@ -108,3 +108,19 @@ async def update_user(
         )
         
     return user
+
+@router.post("/login")
+async def login_user(db: db_dependency, login_request: CreateUserRequest):
+    user = db.query(Users).filter(Users.username == login_request.username).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    # Check if the provided password matches the hashed password
+    if not bcrypt.checkpw(login_request.password.encode("utf-8"), user.hashed_password.encode("utf-8")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+        )
+
+    return {"message": "Login successful", "user_id": user.id}
