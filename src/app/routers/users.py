@@ -24,7 +24,10 @@ def hash_password(password: str) -> str:
 class CreateUserRequest(BaseModel):
     username: str
     password: str
-
+    
+class UpdatePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 def get_db():
     db = SessionLocal()
@@ -125,3 +128,24 @@ async def login_user(db: db_dependency, login_request: CreateUserRequest):
         )
 
     return {"message": "Login successful", "user_id": user.id}
+
+@router.put("/{user_id}/update-password")
+async def update_password(db: db_dependency, user_id: int, update_password_request: UpdatePasswordRequest):
+    user = db.query(Users).filter(Users.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    # Check if the current password is correct
+    if not bcrypt.checkpw(update_password_request.current_password.encode("utf-8"), user.hashed_password.encode("utf-8")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect"
+        )
+
+    # Update the password
+    user.hashed_password = hash_password(update_password_request.new_password)
+    db.add(user)
+    db.commit()
+    
+    return {"message": "Password updated successfully"}     
