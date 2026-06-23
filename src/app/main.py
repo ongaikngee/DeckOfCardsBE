@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from src.app.routers import games, items, models, users
+from src.app.routers import games, items, models, users, chips
 import os
 from src.app.core.database import engine, SessionLocal
 from dotenv import load_dotenv
@@ -27,6 +27,7 @@ app.include_router(items.router)
 app.include_router(games.router)
 app.include_router(models.router)
 app.include_router(users.router)
+app.include_router(chips.router)
 
 origins = [
     "https://deckofcard-beta.vercel.app",
