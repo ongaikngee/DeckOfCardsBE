@@ -32,6 +32,8 @@ class Reason(str, Enum):
     jackpot = "Jackpot"
     payout = "Payout"
     loss = "Loss"
+    bet = "Bet"
+    ante = "Ante"
 
 
 class Chips(BaseModel):
@@ -42,7 +44,7 @@ class Chips(BaseModel):
 
     @model_validator(mode="after")
     def validate_amount(self):
-        if self.reason == Reason.loss:
+        if self.reason == Reason.loss or self.reason == Reason.ante:
             if self.amount >= 0:
                 raise ValueError("Loss amount must be negative")
         else:
