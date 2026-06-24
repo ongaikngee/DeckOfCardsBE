@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from datetime import datetime, timezone
 
 from src.app.core.database import SessionLocal
@@ -28,11 +28,26 @@ class Reason(str, Enum):
     topup = "Topup"
     lottery = "Lottery"
     jackpot = "Jackpot"
+    payout = "Payout"
+    loss = "Loss"
 
 
 class Chips(BaseModel):
-    amount: int
+    amount: int = Field(
+        ge=-10000, le=10000, description="Value can be between -10,000 to 10,000"
+    )
     reason: Reason
+
+    @model_validator(mode="after")
+    def validate_amount(self):
+        if self.reason == Reason.loss:
+            if self.amount >= 0:
+                raise ValueError("Loss amount must be negative")
+        else:
+            if self.amount <= 0:
+                raise ValueError(f"{self.reason.value} amount must be positive")
+
+        return self
 
 
 @router.get("/", status_code=status.HTTP_200_OK)
@@ -48,7 +63,7 @@ def get_all(db: db_dependency, skip: int = 0, limit: int = 100):
 
 
 @router.get("/{user_id}")
-def get_chips_by_user(user_id: int, db:db_dependency):
+def get_chips_by_user(user_id: int, db: db_dependency):
     # Check if user exists in users table, if not return error
     user = db.query(Users).filter(Users.id == user_id).first()
     if not user:
