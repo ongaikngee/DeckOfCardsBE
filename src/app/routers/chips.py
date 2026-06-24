@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 from datetime import datetime, timezone
 
+from sqlalchemy import func
+
 from src.app.core.database import SessionLocal
 from sqlalchemy.orm import Session
 from typing import Annotated
@@ -63,7 +65,7 @@ def get_all(db: db_dependency, skip: int = 0, limit: int = 100):
 
 
 @router.get("/{user_id}")
-def get_chips_by_user(user_id: int, db: db_dependency):
+def get_chips_by_user(db: db_dependency, user_id: int, skip: int = 0, limit: int = 20):
     # Check if user exists in users table, if not return error
     user = db.query(Users).filter(Users.id == user_id).first()
     if not user:
@@ -71,8 +73,24 @@ def get_chips_by_user(user_id: int, db: db_dependency):
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
     # Return chips for the user
-    chips = db.query(ChipsModel).filter(ChipsModel.user_id == user_id).all()
-    return {"data": chips}
+    chips = (
+        db.query(ChipsModel)
+        .filter(ChipsModel.user_id == user_id)
+        .order_by(ChipsModel.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    # Get the sum of amount based on user_id
+    total_amount = (
+        db.query(ChipsModel)
+        .filter(ChipsModel.user_id == user_id)
+        .with_entities(func.sum(ChipsModel.amount))
+        .scalar()
+    )
+
+    return {"data": chips, "total_amount": total_amount}
 
 
 @router.post("/{user_id}", status_code=status.HTTP_201_CREATED)
