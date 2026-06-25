@@ -75,7 +75,9 @@ async def get_users_chip_counts(db: db_dependency):
     results = (
         db.query(
             Users.id.label("user_id"),
+            Users.created_at,
             Users.username,
+            Users.role,
             func.coalesce(func.sum(ChipsModel.amount), 0).label("chip_count"),
         )
         .outerjoin(ChipsModel, ChipsModel.user_id == Users.id)
@@ -88,6 +90,8 @@ async def get_users_chip_counts(db: db_dependency):
         {
             "user_id": row.user_id,
             "username": row.username,
+            "role": row.role,
+            "created_at": row.created_at,
             "chip_count": int(row.chip_count or 0),
         }
         for row in results
@@ -147,6 +151,26 @@ async def delete_user(db: db_dependency, user_id: int):
     db.add(user)
     db.commit()
     return {"message": "User deleted successfully"}
+
+
+@router.post("/{user_id}/make-admin")
+async def make_admin(db: db_dependency, user_id: int):
+    user = (
+        db.query(Users)
+        .filter(Users.id == user_id)
+        .filter(Users.deleted_at.is_(None))
+        .first()
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    user.role = "admin"
+    db.add(user)
+    db.commit()
+
+    return {"message": "User promoted to admin", "user_id": user.id, "role": user.role}
 
 
 @router.put("/{user_id}")
