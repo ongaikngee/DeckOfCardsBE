@@ -45,6 +45,7 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     create_user_model = Users(
         username=create_user_request.username,
         hashed_password=hash_password(create_user_request.password),
+        role="user",
     )
 
     try:
@@ -57,7 +58,11 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
             status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
         )
 
-    return {"user_id": create_user_model.id, "username": create_user_model.username}
+    return {
+        "user_id": create_user_model.id,
+        "username": create_user_model.username,
+        "role": create_user_model.role,
+    }
 
 
 @router.get("/{user_id}")
@@ -127,7 +132,11 @@ async def login_user(db: db_dependency, login_request: CreateUserRequest):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
 
-    return {"message": "Login successful", "user_id": user.id}
+    return {
+        "message": "Login successful",
+        "user_id": user.id,
+        "role": user.role,
+    }
 
 @router.put("/{user_id}/update-password")
 async def update_password(db: db_dependency, user_id: int, update_password_request: UpdatePasswordRequest):
