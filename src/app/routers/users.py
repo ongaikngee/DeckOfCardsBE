@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from starlette import status
 from typing import Annotated
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from src.app.core.database import SessionLocal
 from src.app.models.user import Users
+from src.app.models.chips import Chips as ChipsModel
 import bcrypt
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -63,6 +65,29 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
         "username": create_user_model.username,
         "role": create_user_model.role,
     }
+
+
+@router.get("/chip-counts")
+async def get_users_chip_counts(db: db_dependency):
+    results = (
+        db.query(
+            Users.id.label("user_id"),
+            Users.username,
+            func.coalesce(func.sum(ChipsModel.amount), 0).label("chip_count"),
+        )
+        .outerjoin(ChipsModel, ChipsModel.user_id == Users.id)
+        .group_by(Users.id)
+        .all()
+    )
+
+    return [
+        {
+            "user_id": row.user_id,
+            "username": row.username,
+            "chip_count": int(row.chip_count or 0),
+        }
+        for row in results
+    ]
 
 
 @router.get("/{user_id}")
