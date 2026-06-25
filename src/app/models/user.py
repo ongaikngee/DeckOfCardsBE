@@ -1,5 +1,5 @@
 from src.app.core.database import Base
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime, func
 
 class Users(Base):
     __tablename__ = 'users'
@@ -7,3 +7,5 @@ class Users(Base):
     username = Column(String, unique=True)
     hashed_password = Column(String)
     role = Column(String, default="user")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
