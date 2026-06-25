@@ -2,10 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from starlette import status
 from typing import Annotated
+from sqlalchemy import func
+from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from src.app.core.database import SessionLocal
 from src.app.models.user import Users
+from src.app.models.chips import Chips as ChipsModel
 import bcrypt
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -45,6 +48,7 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     create_user_model = Users(
         username=create_user_request.username,
         hashed_password=hash_password(create_user_request.password),
+        role="user",
     )
 
     try:
@@ -57,12 +61,51 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
             status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
         )
 
-    return {"user_id": create_user_model.id, "username": create_user_model.username}
+    return {
+        "user_id": create_user_model.id,
+        "username": create_user_model.username,
+        "role": create_user_model.role,
+        "created_at": create_user_model.created_at,
+        "deleted_at": create_user_model.deleted_at,
+    }
+
+
+@router.get("/chip-counts")
+async def get_users_chip_counts(db: db_dependency):
+    results = (
+        db.query(
+            Users.id.label("user_id"),
+            Users.created_at,
+            Users.username,
+            Users.role,
+            func.coalesce(func.sum(ChipsModel.amount), 0).label("chip_count"),
+        )
+        .outerjoin(ChipsModel, ChipsModel.user_id == Users.id)
+        .filter(Users.deleted_at.is_(None))
+        .group_by(Users.id)
+        .all()
+    )
+
+    return [
+        {
+            "user_id": row.user_id,
+            "username": row.username,
+            "role": row.role,
+            "created_at": row.created_at,
+            "chip_count": int(row.chip_count or 0),
+        }
+        for row in results
+    ]
 
 
 @router.get("/{user_id}")
 async def get_user(db: db_dependency, user_id: int):
-    user = db.query(Users).filter(Users.id == user_id).first()
+    user = (
+        db.query(Users)
+        .filter(Users.id == user_id)
+        .filter(Users.deleted_at.is_(None))
+        .first()
+    )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
@@ -72,28 +115,74 @@ async def get_user(db: db_dependency, user_id: int):
 
 @router.get("/")
 async def get_users(db: db_dependency):
-    users = db.query(Users).all()
+    users = db.query(Users).filter(Users.deleted_at.is_(None)).all()
     return users
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(db: db_dependency, user_id: int):
-    user = db.query(Users).filter(Users.id == user_id).first()
+    user = (
+        db.query(Users)
+        .filter(Users.id == user_id)
+        .filter(Users.deleted_at.is_(None))
+        .first()
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    # mutate username so it becomes available for reuse
+    now = datetime.utcnow()
+    base_username = f"{user.username}_deleted_{now.strftime('%d%m%y')}"
+    attempt = base_username
+    counter = 1
+    # ensure uniqueness excluding the current record
+    while (
+        db.query(Users)
+        .filter(Users.id != user.id)
+        .filter(Users.username == attempt)
+        .first()
+    ):
+        attempt = f"{base_username}_{counter}"
+        counter += 1
+
+    user.username = attempt
+    user.deleted_at = func.now()
+    db.add(user)
+    db.commit()
+    return {"message": "User deleted successfully"}
+
+
+@router.post("/{user_id}/make-admin")
+async def make_admin(db: db_dependency, user_id: int):
+    user = (
+        db.query(Users)
+        .filter(Users.id == user_id)
+        .filter(Users.deleted_at.is_(None))
+        .first()
+    )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    db.delete(user)
+    user.role = "admin"
+    db.add(user)
     db.commit()
-    return {"message": "User deleted successfully"}
+
+    return {"message": "User promoted to admin", "user_id": user.id, "role": user.role}
 
 
 @router.put("/{user_id}")
 async def update_user(
     db: db_dependency, user_id: int, update_user_request: CreateUserRequest
 ):
-    user = db.query(Users).filter(Users.id == user_id).first()
+    user = (
+        db.query(Users)
+        .filter(Users.id == user_id)
+        .filter(Users.deleted_at.is_(None))
+        .first()
+    )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
@@ -115,7 +204,12 @@ async def update_user(
 
 @router.post("/login")
 async def login_user(db: db_dependency, login_request: CreateUserRequest):
-    user = db.query(Users).filter(Users.username == login_request.username).first()
+    user = (
+        db.query(Users)
+        .filter(Users.username == login_request.username)
+        .filter(Users.deleted_at.is_(None))
+        .first()
+    )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
@@ -127,11 +221,20 @@ async def login_user(db: db_dependency, login_request: CreateUserRequest):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
 
-    return {"message": "Login successful", "user_id": user.id}
+    return {
+        "message": "Login successful",
+        "user_id": user.id,
+        "role": user.role,
+    }
 
 @router.put("/{user_id}/update-password")
 async def update_password(db: db_dependency, user_id: int, update_password_request: UpdatePasswordRequest):
-    user = db.query(Users).filter(Users.id == user_id).first()
+    user = (
+        db.query(Users)
+        .filter(Users.id == user_id)
+        .filter(Users.deleted_at.is_(None))
+        .first()
+    )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
