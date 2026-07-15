@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from datetime import datetime, timezone
 
@@ -67,7 +67,13 @@ def get_all(db: db_dependency, skip: int = 0, limit: int = 100):
 
 
 @router.get("/{user_id}")
-def get_chips_by_user(db: db_dependency, user_id: int, skip: int = 0, limit: int = 20):
+def get_chips_by_user(
+    db: db_dependency,
+    user_id: int,
+    showTopup: bool = Query(True),
+    skip: int = 0,
+    limit: int = 20,
+):
     # Check if user exists in users table, if not return error
     user = db.query(Users).filter(Users.id == user_id).first()
     if not user:
@@ -75,14 +81,13 @@ def get_chips_by_user(db: db_dependency, user_id: int, skip: int = 0, limit: int
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
     # Return chips for the user
-    chips = (
-        db.query(ChipsModel)
-        .filter(ChipsModel.user_id == user_id)
-        .order_by(ChipsModel.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    query = db.query(ChipsModel).filter(ChipsModel.user_id == user_id)
+
+    # Only show top-up record if requested
+    if showTopup:
+        query = query.filter(ChipsModel.reason == Reason.topup)
+
+    chips = query.order_by(ChipsModel.created_at.desc()).offset(skip).limit(limit).all()
 
     # Get the sum of amount based on user_id
     total_amount = (
