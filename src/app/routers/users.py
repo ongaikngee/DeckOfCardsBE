@@ -112,6 +112,18 @@ async def get_user(db: db_dependency, user_id: int):
         )
     return user
 
+def get_user_by_username(db: db_dependency, username: str):
+    user = (
+        db.query(Users)
+        .filter(Users.username == username)
+        .filter(Users.deleted_at.is_(None))
+        .first()
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    return user
 
 @router.get("/")
 async def get_users(db: db_dependency):
