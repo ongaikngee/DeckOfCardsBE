@@ -9,10 +9,16 @@ from sqlalchemy.exc import IntegrityError
 from src.app.core.database import SessionLocal
 from src.app.models.user import Users
 from src.app.models.chips import Chips as ChipsModel
+from datetime import timedelta
 import bcrypt
+from src.app.core.security import (
+    create_access_token,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    Token,
+    verify_password,
+)
 
 router = APIRouter(prefix="/users", tags=["Users"])
-
 
 def hash_password(password: str) -> str:
     # Convert string to bytes
@@ -24,13 +30,20 @@ def hash_password(password: str) -> str:
     return hashed.decode("utf-8")
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
 class CreateUserRequest(BaseModel):
     username: str
     password: str
-    
+
+
 class UpdatePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
 
 def get_db():
     db = SessionLocal()
@@ -54,7 +67,7 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     try:
         db.add(create_user_model)
         db.commit()
-        db.refresh(create_user_model) 
+        db.refresh(create_user_model)
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -112,18 +125,6 @@ async def get_user(db: db_dependency, user_id: int):
         )
     return user
 
-def get_user_by_username(db: db_dependency, username: str):
-    user = (
-        db.query(Users)
-        .filter(Users.username == username)
-        .filter(Users.deleted_at.is_(None))
-        .first()
-    )
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
-    return user
 
 @router.get("/")
 async def get_users(db: db_dependency):
@@ -211,36 +212,44 @@ async def update_user(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
         )
-        
+
     return user
 
+
 @router.post("/login")
-async def login_user(db: db_dependency, login_request: CreateUserRequest):
+async def login_user(db: db_dependency, login_request: LoginRequest):
+
     user = (
         db.query(Users)
         .filter(Users.username == login_request.username)
         .filter(Users.deleted_at.is_(None))
         .first()
     )
+
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
         )
-
-    # Check if the provided password matches the hashed password
-    if not bcrypt.checkpw(login_request.password.encode("utf-8"), user.hashed_password.encode("utf-8")):
+    
+    if not verify_password(
+        login_request.password, user.hashed_password
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
+        
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return Token(access_token=access_token, token_type="bearer")
 
-    return {
-        "message": "Login successful",
-        "user_id": user.id,
-        "role": user.role,
-    }
 
 @router.put("/{user_id}/update-password")
-async def update_password(db: db_dependency, user_id: int, update_password_request: UpdatePasswordRequest):
+async def update_password(
+    db: db_dependency, user_id: int, update_password_request: UpdatePasswordRequest
+):
     user = (
         db.query(Users)
         .filter(Users.id == user_id)
@@ -253,14 +262,18 @@ async def update_password(db: db_dependency, user_id: int, update_password_reque
         )
 
     # Check if the current password is correct
-    if not bcrypt.checkpw(update_password_request.current_password.encode("utf-8"), user.hashed_password.encode("utf-8")):
+    if not bcrypt.checkpw(
+        update_password_request.current_password.encode("utf-8"),
+        user.hashed_password.encode("utf-8"),
+    ):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
         )
 
     # Update the password
     user.hashed_password = hash_password(update_password_request.new_password)
     db.add(user)
     db.commit()
-    
-    return {"message": "Password updated successfully"}     
+
+    return {"message": "Password updated successfully"}
