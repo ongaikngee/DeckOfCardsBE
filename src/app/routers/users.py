@@ -10,24 +10,20 @@ from src.app.core.database import SessionLocal
 from src.app.models.user import Users
 from src.app.models.chips import Chips as ChipsModel
 from datetime import timedelta
-import bcrypt
 from src.app.core.security import (
     create_access_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
-    Token,
     verify_password,
+    hash_password,
 )
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
-def hash_password(password: str) -> str:
-    # Convert string to bytes
-    password_bytes = password.encode("utf-8")
-    # Generate a salt and hash the password
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password_bytes, salt)
-    # Return as a string to store in your database
-    return hashed.decode("utf-8")
+
+class UserInfo(BaseModel):
+    id: int
+    username: str
+    role: str
 
 
 class LoginRequest(BaseModel):
@@ -43,6 +39,12 @@ class CreateUserRequest(BaseModel):
 class UpdatePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserInfo
 
 
 def get_db():
@@ -216,7 +218,10 @@ async def update_user(
     return user
 
 
-@router.post("/login")
+@router.post(
+    "/login",
+    response_model=LoginResponse,
+)
 async def login_user(db: db_dependency, login_request: LoginRequest):
 
     user = (
@@ -228,22 +233,28 @@ async def login_user(db: db_dependency, login_request: LoginRequest):
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
-    
-    if not verify_password(
-        login_request.password, user.hashed_password
-    ):
+
+    if not verify_password(login_request.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
-        
+
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return Token(access_token=access_token, token_type="bearer")
+
+    return LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserInfo(
+            id=user.id,
+            username=user.username,
+            role=user.role,
+        ),
+    )
 
 
 @router.put("/{user_id}/update-password")
@@ -262,9 +273,8 @@ async def update_password(
         )
 
     # Check if the current password is correct
-    if not bcrypt.checkpw(
-        update_password_request.current_password.encode("utf-8"),
-        user.hashed_password.encode("utf-8"),
+    if not verify_password(
+        update_password_request.current_password, user.hashed_password
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
