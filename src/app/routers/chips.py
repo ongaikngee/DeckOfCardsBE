@@ -12,7 +12,11 @@ from src.app.models.user import Users
 from enum import Enum
 from starlette import status
 
-router = APIRouter(prefix="/chips", tags=["Chips"])
+from src.app.core.auth import get_current_user
+
+router = APIRouter(
+    prefix="/chips", tags=["Chips"], dependencies=[Depends(get_current_user)]
+)
 
 
 def get_db():

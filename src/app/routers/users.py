@@ -16,8 +16,16 @@ from src.app.core.security import (
     verify_password,
     hash_password,
 )
+from src.app.core.auth import get_current_user
 
-router = APIRouter(prefix="/users", tags=["Users"])
+router = APIRouter(
+    prefix="/users", tags=["Users"], dependencies=[Depends(get_current_user)]
+)
+
+public_router = APIRouter(
+    prefix="/users",
+    tags=["Users"],
+)
 
 
 class UserInfo(BaseModel):
@@ -218,7 +226,7 @@ async def update_user(
     return user
 
 
-@router.post(
+@public_router.post(
     "/login",
     response_model=LoginResponse,
 )

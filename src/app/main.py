@@ -62,6 +62,7 @@ app.include_router(items.router)
 app.include_router(games.router)
 app.include_router(models.router)
 app.include_router(users.router)
+app.include_router(users.public_router)
 app.include_router(chips.router)
 
 origins = [
