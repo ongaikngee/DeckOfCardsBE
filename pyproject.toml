@@ -13,5 +13,5 @@ dependencies = [
     "bcrypt",
     "sqlalchemy",
     "psycopg2",
-    "jwt",
+    "PyJWT",
 ]
