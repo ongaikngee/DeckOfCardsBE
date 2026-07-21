@@ -66,7 +66,7 @@ def get_db():
 db_dependency = Annotated[Session, Depends(get_db)]
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@public_router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_user(db: db_dependency, create_user_request: CreateUserRequest):
     create_user_model = Users(
         username=create_user_request.username,
@@ -84,15 +84,21 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
             status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
         )
 
-    return {
-        "user_id": create_user_model.id,
-        "username": create_user_model.username,
-        "role": create_user_model.role,
-        "created_at": create_user_model.created_at,
-        "deleted_at": create_user_model.deleted_at,
-    }
-
-
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": create_user_model.username}, expires_delta=access_token_expires
+    )
+    
+    return LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserInfo(
+            id=create_user_model.id,
+            username=create_user_model.username,
+            role=create_user_model.role,
+        ),
+    )
+    
 @router.get("/chip-counts")
 async def get_users_chip_counts(db: db_dependency):
     results = (
