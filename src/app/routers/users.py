@@ -9,28 +9,51 @@ from sqlalchemy.exc import IntegrityError
 from src.app.core.database import SessionLocal
 from src.app.models.user import Users
 from src.app.models.chips import Chips as ChipsModel
-import bcrypt
+from datetime import timedelta
+from src.app.core.security import (
+    create_access_token,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    verify_password,
+    hash_password,
+)
+from src.app.core.auth import get_current_user
 
-router = APIRouter(prefix="/users", tags=["Users"])
+router = APIRouter(
+    prefix="/users", tags=["Users"], dependencies=[Depends(get_current_user)]
+)
+
+public_router = APIRouter(
+    prefix="/users",
+    tags=["Users"],
+)
 
 
-def hash_password(password: str) -> str:
-    # Convert string to bytes
-    password_bytes = password.encode("utf-8")
-    # Generate a salt and hash the password
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password_bytes, salt)
-    # Return as a string to store in your database
-    return hashed.decode("utf-8")
+class UserInfo(BaseModel):
+    id: int
+    username: str
+    role: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 class CreateUserRequest(BaseModel):
     username: str
     password: str
-    
+
+
 class UpdatePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserInfo
+
 
 def get_db():
     db = SessionLocal()
@@ -43,7 +66,7 @@ def get_db():
 db_dependency = Annotated[Session, Depends(get_db)]
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@public_router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_user(db: db_dependency, create_user_request: CreateUserRequest):
     create_user_model = Users(
         username=create_user_request.username,
@@ -54,22 +77,28 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     try:
         db.add(create_user_model)
         db.commit()
-        db.refresh(create_user_model) 
+        db.refresh(create_user_model)
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
         )
 
-    return {
-        "user_id": create_user_model.id,
-        "username": create_user_model.username,
-        "role": create_user_model.role,
-        "created_at": create_user_model.created_at,
-        "deleted_at": create_user_model.deleted_at,
-    }
-
-
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": create_user_model.username}, expires_delta=access_token_expires
+    )
+    
+    return LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserInfo(
+            id=create_user_model.id,
+            username=create_user_model.username,
+            role=create_user_model.role,
+        ),
+    )
+    
 @router.get("/chip-counts")
 async def get_users_chip_counts(db: db_dependency):
     results = (
@@ -199,36 +228,53 @@ async def update_user(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
         )
-        
+
     return user
 
-@router.post("/login")
-async def login_user(db: db_dependency, login_request: CreateUserRequest):
+
+@public_router.post(
+    "/login",
+    response_model=LoginResponse,
+)
+async def login_user(db: db_dependency, login_request: LoginRequest):
+
     user = (
         db.query(Users)
         .filter(Users.username == login_request.username)
         .filter(Users.deleted_at.is_(None))
         .first()
     )
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
 
-    # Check if the provided password matches the hashed password
-    if not bcrypt.checkpw(login_request.password.encode("utf-8"), user.hashed_password.encode("utf-8")):
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
 
-    return {
-        "message": "Login successful",
-        "user_id": user.id,
-        "role": user.role,
-    }
+    if not verify_password(login_request.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+        )
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    return LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserInfo(
+            id=user.id,
+            username=user.username,
+            role=user.role,
+        ),
+    )
+
 
 @router.put("/{user_id}/update-password")
-async def update_password(db: db_dependency, user_id: int, update_password_request: UpdatePasswordRequest):
+async def update_password(
+    db: db_dependency, user_id: int, update_password_request: UpdatePasswordRequest
+):
     user = (
         db.query(Users)
         .filter(Users.id == user_id)
@@ -241,14 +287,17 @@ async def update_password(db: db_dependency, user_id: int, update_password_reque
         )
 
     # Check if the current password is correct
-    if not bcrypt.checkpw(update_password_request.current_password.encode("utf-8"), user.hashed_password.encode("utf-8")):
+    if not verify_password(
+        update_password_request.current_password, user.hashed_password
+    ):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
         )
 
     # Update the password
     user.hashed_password = hash_password(update_password_request.new_password)
     db.add(user)
     db.commit()
-    
-    return {"message": "Password updated successfully"}     
+
+    return {"message": "Password updated successfully"}

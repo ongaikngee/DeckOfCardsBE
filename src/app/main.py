@@ -15,7 +15,6 @@ load_dotenv()
 app = FastAPI()
 src.app.models.user.Base.metadata.create_all(bind=engine)
 
-
 def create_default_admin():
     with engine.begin() as connection:
         connection.exec_driver_sql(
@@ -32,16 +31,22 @@ def create_default_admin():
     try:
         existing_admin = db.query(Users).filter(Users.username == "Admin").first()
         if existing_admin is None:
-            hashed_password = bcrypt.hashpw("password".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-            admin_user = Users(username="Admin", hashed_password=hashed_password, role="admin")
+            hashed_password = bcrypt.hashpw(
+                "password".encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
+            admin_user = Users(
+                username="Admin", hashed_password=hashed_password, role="admin"
+            )
             db.add(admin_user)
             db.commit()
     finally:
         db.close()
 
+
 @app.on_event("startup")
 def startup_create_default_admin():
     create_default_admin()
+
 
 def get_db():
     db = SessionLocal()
@@ -49,13 +54,15 @@ def get_db():
         yield db
     finally:
         db.close()
-        
+
+
 db_dependency = Annotated[Session, Depends(get_db)]
 
 app.include_router(items.router)
 app.include_router(games.router)
 app.include_router(models.router)
 app.include_router(users.router)
+app.include_router(users.public_router)
 app.include_router(chips.router)
 
 origins = [
@@ -73,6 +80,7 @@ app.add_middleware(
 )
 
 fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"}]
+
 
 @app.get("/")
 def read_root():
