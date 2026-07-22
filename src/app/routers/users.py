@@ -88,7 +88,7 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     access_token = create_access_token(
         data={"sub": create_user_model.username}, expires_delta=access_token_expires
     )
-    
+
     return LoginResponse(
         access_token=access_token,
         token_type="bearer",
@@ -98,7 +98,8 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
             role=create_user_model.role,
         ),
     )
-    
+
+
 @router.get("/chip-counts")
 async def get_users_chip_counts(db: db_dependency):
     results = (
@@ -125,6 +126,15 @@ async def get_users_chip_counts(db: db_dependency):
         }
         for row in results
     ]
+
+
+@router.get("/me", response_model=UserInfo)
+async def get_me(current_user: Users = Depends(get_current_user)):
+    return UserInfo(
+        id=current_user.id,
+        username=current_user.username,
+        role=current_user.role,
+    )
 
 
 @router.get("/{user_id}")
