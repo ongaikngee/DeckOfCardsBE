@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import bcrypt
 import jwt
 import os
+import hashlib
 from jwt.exceptions import InvalidTokenError
 from fastapi.security import HTTPBearer
 
@@ -34,13 +35,7 @@ def hash_password(password: str) -> str:
 
 
 def hash_refresh_token(token: str) -> str:
-    # Convert string to bytes
-    password_bytes = token.encode("utf-8")
-    # Generate a salt and hash the password
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password_bytes, salt)
-    # Return as a string to store in your database
-    return hashed.decode("utf-8")
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):

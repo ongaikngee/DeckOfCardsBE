@@ -297,10 +297,12 @@ async def login_user(db: db_dependency, login_request: LoginRequest):
         data={"sub": user.username}
     )
 
+    refreu_token_hashed = hash_refresh_token(refresh_token)
+    print("login", refreu_token_hashed)
     db.add(
         RefreshToken(
             user_id=user.id,
-            token_hash=hash_refresh_token(refresh_token),
+            token_hash=refreu_token_hashed,
             expired_at=refresh_token_expires,
         )
     )
@@ -353,7 +355,8 @@ async def update_password(
 @public_router.post("/refresh")
 async def refresh_token(db: db_dependency, request: RefreshRequest):
     payload = decode_refresh_token(request.refresh_token)
-
+    example_hash = hash_refresh_token(request.refresh_token)
+    print("refershHash",example_hash)
     stored_token = (
         db.query(RefreshToken)
         .filter(RefreshToken.token_hash == hash_refresh_token(request.refresh_token))
@@ -370,7 +373,7 @@ async def refresh_token(db: db_dependency, request: RefreshRequest):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revoked"
         )
 
-    if stored_token.expires_at < datetime.now(timezone.utc):
+    if stored_token.expired_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired"
         )
@@ -401,7 +404,7 @@ async def refresh_token(db: db_dependency, request: RefreshRequest):
         RefreshToken(
             user_id=user.id,
             token_hash=hashed_refresh,
-            expires_at=refresh_expiry,
+            expired_at=refresh_expiry,
         )
     )
     db.commit()
