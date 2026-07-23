@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import bcrypt
 import jwt
 import os
+import hashlib
 from jwt.exceptions import InvalidTokenError
 from fastapi.security import HTTPBearer
 
@@ -14,8 +15,10 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 10
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 security = HTTPBearer()
+
 
 def verify_password(plain, hashed):
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
@@ -31,6 +34,10 @@ def hash_password(password: str) -> str:
     return hashed.decode("utf-8")
 
 
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
@@ -40,6 +47,18 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def create_refresh_token(data: dict):
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    payload = data.copy()
+    payload.update({"exp": expire, "type": "refresh"})
+    token = jwt.encode(
+        payload,
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
+    return token, expire
 
 
 def decode_access_token(token: str) -> dict:
@@ -54,5 +73,15 @@ def decode_access_token(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
         )
+
+    return payload
+
+
+def decode_refresh_token(token: str) -> dict:
+
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     return payload
