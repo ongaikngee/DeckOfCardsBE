@@ -3,18 +3,23 @@ from pydantic import BaseModel
 from starlette import status
 from typing import Annotated
 from sqlalchemy import func
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from src.app.core.database import SessionLocal
 from src.app.models.user import Users
 from src.app.models.chips import Chips as ChipsModel
+from src.app.models.refresh_token import RefreshToken
 from datetime import timedelta
 from src.app.core.security import (
     create_access_token,
+    create_refresh_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    REFRESH_TOKEN_EXPIRE_DAYS,
     verify_password,
     hash_password,
+    decode_refresh_token,
+    hash_refresh_token,
 )
 from src.app.core.auth import get_current_user
 
@@ -51,8 +56,13 @@ class UpdatePasswordRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
     user: UserInfo
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 def get_db():
@@ -76,21 +86,34 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
 
     try:
         db.add(create_user_model)
+        db.flush()
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": create_user_model.username, "type": "access"},
+            expires_delta=access_token_expires,
+        )
+
+        refresh_token, refresh_token_expires = create_refresh_token(
+            data={"sub": create_user_model.username}
+        )
+
+        db.add(
+            RefreshToken(
+                user_id=create_user_model.id,
+                token_hash=hash_refresh_token(refresh_token),
+                expired_at=refresh_token_expires,
+            )
+        )
         db.commit()
-        db.refresh(create_user_model)
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
         )
 
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": create_user_model.username}, expires_delta=access_token_expires
-    )
-
     return LoginResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         token_type="bearer",
         user=UserInfo(
             id=create_user_model.id,
@@ -267,11 +290,23 @@ async def login_user(db: db_dependency, login_request: LoginRequest):
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.username, "type": "access"},
+        expires_delta=access_token_expires,
     )
+    refresh_token, refresh_token_expires = create_refresh_token(data={"sub": user.username})
 
+    db.add(
+        RefreshToken(
+            user_id=user.id,
+            token_hash=hash_refresh_token(refresh_token),
+            expired_at=refresh_token_expires,
+        )
+    )
+    db.commit()
+            
     return LoginResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         token_type="bearer",
         user=UserInfo(
             id=user.id,
@@ -311,3 +346,15 @@ async def update_password(
     db.commit()
 
     return {"message": "Password updated successfully"}
+
+
+@public_router.post("/refresh")
+async def refresh_token(request: RefreshRequest):
+
+    payload = decode_refresh_token(request.refresh_token)
+
+    username = payload["sub"]
+
+    access_token = create_access_token(data={"sub": username})
+
+    return {"access_token": access_token, "token_type": "bearer"}
