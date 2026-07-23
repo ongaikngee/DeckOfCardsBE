@@ -15,7 +15,6 @@ from src.app.core.security import (
     create_access_token,
     create_refresh_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
-    REFRESH_TOKEN_EXPIRE_DAYS,
     verify_password,
     hash_password,
     decode_refresh_token,
@@ -62,6 +61,10 @@ class LoginResponse(BaseModel):
 
 
 class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
     refresh_token: str
 
 
@@ -297,12 +300,10 @@ async def login_user(db: db_dependency, login_request: LoginRequest):
         data={"sub": user.username}
     )
 
-    refreu_token_hashed = hash_refresh_token(refresh_token)
-    print("login", refreu_token_hashed)
     db.add(
         RefreshToken(
             user_id=user.id,
-            token_hash=refreu_token_hashed,
+            token_hash=hash_refresh_token(refresh_token),
             expired_at=refresh_token_expires,
         )
     )
@@ -318,6 +319,24 @@ async def login_user(db: db_dependency, login_request: LoginRequest):
             role=user.role,
         ),
     )
+
+
+@router.post("/logout")
+async def logout(
+    db: db_dependency,
+    request: LogoutRequest,
+):
+    token_hash = hash_refresh_token(request.refresh_token)
+
+    stored_token = (
+        db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
+    )
+
+    if stored_token:
+        stored_token.revoked_at = datetime.now(timezone.utc)
+        db.commit()
+
+    return {"message": "Logged out"}
 
 
 @router.put("/{user_id}/update-password")
@@ -356,7 +375,7 @@ async def update_password(
 async def refresh_token(db: db_dependency, request: RefreshRequest):
     payload = decode_refresh_token(request.refresh_token)
     example_hash = hash_refresh_token(request.refresh_token)
-    print("refershHash",example_hash)
+    print("refershHash", example_hash)
     stored_token = (
         db.query(RefreshToken)
         .filter(RefreshToken.token_hash == hash_refresh_token(request.refresh_token))
