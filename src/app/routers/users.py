@@ -293,7 +293,9 @@ async def login_user(db: db_dependency, login_request: LoginRequest):
         data={"sub": user.username, "type": "access"},
         expires_delta=access_token_expires,
     )
-    refresh_token, refresh_token_expires = create_refresh_token(data={"sub": user.username})
+    refresh_token, refresh_token_expires = create_refresh_token(
+        data={"sub": user.username}
+    )
 
     db.add(
         RefreshToken(
@@ -303,7 +305,7 @@ async def login_user(db: db_dependency, login_request: LoginRequest):
         )
     )
     db.commit()
-            
+
     return LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -349,12 +351,64 @@ async def update_password(
 
 
 @public_router.post("/refresh")
-async def refresh_token(request: RefreshRequest):
-
+async def refresh_token(db: db_dependency, request: RefreshRequest):
     payload = decode_refresh_token(request.refresh_token)
+
+    stored_token = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.token_hash == hash_refresh_token(request.refresh_token))
+        .first()
+    )
+
+    if stored_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+        )
+
+    if stored_token.revoked_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revoked"
+        )
+
+    if stored_token.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired"
+        )
 
     username = payload["sub"]
 
-    access_token = create_access_token(data={"sub": username})
+    user = (
+        db.query(Users)
+        .filter(Users.username == username)
+        .filter(Users.deleted_at.is_(None))
+        .first()
+    )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User no longer exists",
+        )
+
+    stored_token.revoked_at = datetime.now(timezone.utc)
+    new_refresh_token, refresh_expiry = create_refresh_token(
+        data={"sub": user.username}
+    )
+
+    hashed_refresh = hash_refresh_token(new_refresh_token)
+
+    db.add(
+        RefreshToken(
+            user_id=user.id,
+            token_hash=hashed_refresh,
+            expires_at=refresh_expiry,
+        )
+    )
+    db.commit()
+    access_token = create_access_token(data={"sub": user.username, "type": "access"})
+
+    return {
+        "access_token": access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+    }
