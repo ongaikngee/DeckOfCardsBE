@@ -1,14 +1,16 @@
-from fastapi import FastAPI, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from src.app.routers import games, items, models, users, chips
 import os
-from src.app.core.database import engine, SessionLocal
-from dotenv import load_dotenv
-import src.app.models.user
-from src.app.models.user import Users
 from typing import Annotated
-from sqlalchemy.orm import Session
+
 import bcrypt
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+
+import src.app.models.user
+from src.app.core.database import SessionLocal, engine
+from src.app.models.user import Users
+from src.app.routers import chips, games, items, models, users
 
 load_dotenv()
 

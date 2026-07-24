@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends
 from enum import Enum
+
+from fastapi import APIRouter, Depends
+
 from src.app.core.auth import get_current_user
+
 
 class ModelName(str, Enum):
     alexnet = "alexnet"

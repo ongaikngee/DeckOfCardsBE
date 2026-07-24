@@ -1,18 +1,17 @@
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
-from datetime import datetime, timezone
-
 from sqlalchemy import func
-
-from src.app.core.database import SessionLocal
 from sqlalchemy.orm import Session
-from typing import Annotated
-from src.app.models.chips import Chips as ChipsModel
-from src.app.models.user import Users
-from enum import Enum
 from starlette import status
 
 from src.app.core.auth import get_current_user
+from src.app.core.database import SessionLocal
+from src.app.models.chips import Chips as ChipsModel
+from src.app.models.user import Users
 
 router = APIRouter(
     prefix="/chips", tags=["Chips"], dependencies=[Depends(get_current_user)]
