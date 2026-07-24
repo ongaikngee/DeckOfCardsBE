@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+
 from src.app.core.auth import get_current_user
 
 router = APIRouter(

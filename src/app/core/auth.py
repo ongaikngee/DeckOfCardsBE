@@ -1,13 +1,12 @@
 from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from src.app.core.database import SessionLocal
 from src.app.core.security import (
     decode_access_token,
-    security
+    security,
 )
-from fastapi.security import HTTPAuthorizationCredentials
-
 from src.app.models.user import Users
 
 

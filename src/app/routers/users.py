@@ -1,26 +1,27 @@
+from datetime import datetime, timedelta, timezone
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from starlette import status
-from typing import Annotated
 from sqlalchemy import func
-from datetime import datetime, timezone
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+from starlette import status
+
+from src.app.core.auth import get_current_user
 from src.app.core.database import SessionLocal
-from src.app.models.user import Users
-from src.app.models.chips import Chips as ChipsModel
-from src.app.models.refresh_token import RefreshToken
-from datetime import timedelta
 from src.app.core.security import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
     create_refresh_token,
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    verify_password,
-    hash_password,
     decode_refresh_token,
+    hash_password,
     hash_refresh_token,
+    verify_password,
 )
-from src.app.core.auth import get_current_user
+from src.app.models.chips import Chips as ChipsModel
+from src.app.models.refresh_token import RefreshToken
+from src.app.models.user import Users
 
 router = APIRouter(
     prefix="/users", tags=["Users"], dependencies=[Depends(get_current_user)]
@@ -197,7 +198,7 @@ async def delete_user(db: db_dependency, user_id: int):
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
     # mutate username so it becomes available for reuse
-    now = datetime.utcnow()
+    now = datetime.now(tz=timezone.utc)
     base_username = f"{user.username}_deleted_{now.strftime('%d%m%y')}"
     attempt = base_username
     counter = 1

@@ -1,5 +1,6 @@
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
+
 from src.app.core.database import Base
-from sqlalchemy import Column, Integer, String, DateTime, func, ForeignKey
 
 
 class Chips(Base):
