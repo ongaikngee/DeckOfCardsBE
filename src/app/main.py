@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 import bcrypt
@@ -14,7 +15,14 @@ from src.app.routers import chips, games, items, models, users
 
 load_dotenv()
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    create_default_admin()
+    
+    yield
+    
+app = FastAPI(lifespan=lifespan)
 src.app.models.user.Base.metadata.create_all(bind=engine)
 
 def create_default_admin():
@@ -33,9 +41,9 @@ def create_default_admin():
     try:
         existing_admin = db.query(Users).filter(Users.username == "Admin").first()
         if existing_admin is None:
-            hashed_password = bcrypt.hashpw(
-                "password".encode("utf-8"), bcrypt.gensalt()
-            ).decode("utf-8")
+            hashed_password = bcrypt.hashpw(b"password", bcrypt.gensalt()).decode(
+                "utf-8"
+            )
             admin_user = Users(
                 username="Admin", hashed_password=hashed_password, role="admin"
             )
@@ -43,12 +51,6 @@ def create_default_admin():
             db.commit()
     finally:
         db.close()
-
-
-@app.on_event("startup")
-def startup_create_default_admin():
-    create_default_admin()
-
 
 def get_db():
     db = SessionLocal()
