@@ -7,7 +7,7 @@ import jwt
 from dotenv import load_dotenv
 from fastapi import HTTPException, status
 from fastapi.security import HTTPBearer
-from jwt.exceptions import InvalidTokenError
+from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
 
 load_dotenv()
 
@@ -44,7 +44,9 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        )
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -69,13 +71,41 @@ def decode_access_token(token: str) -> dict:
             SECRET_KEY,
             algorithms=[ALGORITHM],
         )
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": "token_expired",
+                "message": "Access token expired",
+            },
+        )
+
     except InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail={
+                "error": "invalid_token",
+                "message": "Invalid access token",
+            },
         )
 
     return payload
+
+
+# def decode_access_token(token: str) -> dict:
+#     try:
+#         payload = jwt.decode(
+#             token,
+#             SECRET_KEY,
+#             algorithms=[ALGORITHM],
+#         )
+#     except InvalidTokenError:
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Could not validate credentials",
+#         )
+
+#     return payload
 
 
 def decode_refresh_token(token: str) -> dict:
