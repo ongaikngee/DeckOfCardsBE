@@ -375,8 +375,6 @@ async def update_password(
 @public_router.post("/refresh")
 async def refresh_token(db: db_dependency, request: RefreshRequest):
     payload = decode_refresh_token(request.refresh_token)
-    example_hash = hash_refresh_token(request.refresh_token)
-    print("refershHash", example_hash)
     stored_token = (
         db.query(RefreshToken)
         .filter(RefreshToken.token_hash == hash_refresh_token(request.refresh_token))
