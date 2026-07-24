@@ -7,7 +7,7 @@ import jwt
 from dotenv import load_dotenv
 from fastapi import HTTPException, status
 from fastapi.security import HTTPBearer
-from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
 load_dotenv()
 
